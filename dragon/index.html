@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIXI - Cinematic Interactive Landing</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- Three.js for 3D Ambient Elements -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        /* =========================================
+           CSS VARIABLES & THEME CONTROL
+           ========================================= */
+        :root {
+            --bg-default: #1a1a1a;
+            --bg-active: #0a0a0a;
+            --accent: #fff;
+            --beam-color: rgba(255, 255, 255, 0.2);
+            --ease-cinematic: cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-default);
+            color: white;
+            transition: background-color 0.8s var(--ease-cinematic);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body.theme-red { --bg-default: #4a0a0a; --bg-active: #1a0505; --accent: #ff4d4d; --beam-color: rgba(255, 50, 50, 0.3); }
+        body.theme-blue { --bg-default: #0a1a4a; --bg-active: #050a1a; --accent: #00d4ff; --beam-color: rgba(50, 150, 255, 0.3); }
+        body.theme-green { --bg-default: #0a2a1a; --bg-active: #05140a; --accent: #2ecc71; --beam-color: rgba(50, 255, 150, 0.3); }
+
+        body.fire-on { background-color: var(--bg-active); }
+
+        #app { position: relative; width: 100%; height: 100%; z-index: 10; }
+
+        #three-canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1; 
+        }
+
+        #light-beam-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            display: flex;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #light-beam {
+            position: absolute;
+            top: -5vh;
+            width: 150vw;
+            height: 120vh;
+            background: radial-gradient(circle at 50% 0%, var(--beam-color) 0%, transparent 60%);
+            clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+            mix-blend-mode: screen;
+            opacity: 0;
+            transition: opacity 0.5s ease 0.15s;
+            transform-origin: top center;
+        }
+
+        #light-beam.active { opacity: 1; }
+
+        /* =========================================
+           RETORED STEPPED LINE MENU
+           ========================================= */
+        .menu-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .line { background: white; height: 2px; transition: 0.3s; }
+        .line-1 { width: 35px; }
+        .line-2 { width: 25px; }
+        .line-3 { width: 15px; }
+
+        /* =========================================
+           INTERACTIVE ROPE
+           ========================================= */
+        #rope-container {
+            position: absolute;
+            top: 0; left: 50%;
+            transform: translateX(-50%);
+            height: 120px;
+            width: 60px;
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; z-index: 150;
+        }
+
+        .rope-line { width: 2px; height: 100%; background: rgba(255, 255, 255, 0.3); transition: 0.4s; }
+        .rope-handle { width: 12px; height: 40px; background: #fff; border-radius: 6px; margin-top: -10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); }
+        body.fire-on .rope-line { background: var(--accent); }
+        body.fire-on .rope-handle { background: var(--accent); box-shadow: 0 0 20px var(--accent); }
+
+        /* =========================================
+           NAVIGATION
+           ========================================= */
+        .nav-btn {
+            position: absolute; top: 50%;
+            background: transparent; border: none; color: white;
+            font-family: 'Oswald', sans-serif; font-size: 1rem; letter-spacing: 4px;
+            cursor: pointer; z-index: 200; padding: 20px;
+            writing-mode: vertical-rl; text-transform: uppercase;
+            opacity: 0.4; transition: 0.3s;
+        }
+        .nav-btn:hover { opacity: 1; transform: translateY(-50%) scale(1.1); }
+        .prev-btn { left: 10px; transform: translateY(-50%) rotate(180deg); }
+        .next-btn { right: 10px; transform: translateY(-50%); }
+
+        /* =========================================
+           DRAGON POSITIONING (Slightly Downward)
+           ========================================= */
+        .dragon-wrapper {
+            position: absolute;
+            top: 60%; /* Moved slightly down from 52% */
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            pointer-events: none; z-index: 10;
+        }
+
+        .dragon-img {
+            position: relative;
+            max-width: 70%;
+            max-height: 85vh;
+            transform: scale(0.75);
+            z-index: 10;
+        }
+
+        .fire-img {
+            position: absolute;
+            top: 43%; 
+            left: 50%;
+            width: 52%;
+
+            transform: translate(-50%, -50%) scale(0.06);
+            z-index: 15;
+            opacity: 0;
+            transition: 0.4s;
+            mix-blend-mode: screen;
+        }
+
+        .fire-img.active { opacity: 1; transform: translate(-50%, -50%) scale(0.16); }
+
+        /* =========================================
+           UI ELEMENTS
+           ========================================= */
+        .slide { position: absolute; inset: 0; visibility: hidden; }
+        .slide.active { visibility: visible; }
+
+        header {
+            position: absolute; top: 0; left: 0; width: 100%;
+            padding: 40px 60px; box-sizing: border-box;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 100;
+        }
+        .logo { font-family: 'Oswald', sans-serif; font-size: 2rem; font-weight: 700; letter-spacing: 4px; }
+
+        .top-section { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .bottom-section { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        .cta-wrap { position: absolute; bottom: 60px; left: 60px; pointer-events: auto; }
+        .text-wrap { position: absolute; bottom: 60px; right: 60px; text-align: right; max-width: 450px; pointer-events: auto; }
+
+        h2 { font-family: 'Oswald', sans-serif; font-size: 5.5rem; margin: 0; line-height: 0.9; text-transform: uppercase; }
+        p { font-size: 1rem; line-height: 1.6; opacity: 0.6; margin-top: 15px; }
+
+        .cta {
+            font-family: 'Oswald', sans-serif;
+            background: white; color: black; padding: 20px 50px; border: none;
+            font-size: 1.1rem; font-weight: 700; cursor: pointer; border-radius: 2px;
+            transition: 0.3s;
+        }
+
+        /* Animations */
+        .anim-element { opacity: 0; }
+        @keyframes riseUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .rise-up { animation: riseUp 1s var(--ease-cinematic) forwards; }
+
+        /* =========================================
+           MOBILE (70/30 SPLIT)
+           ========================================= */
+        @media (max-width: 768px) {
+            header { padding: 30px; }
+            .slide { display: flex; flex-direction: column; }
+            .top-section { position: relative; height: 70vh; width: 100%; }
+            .bottom-section {
+                position: relative; height: 30vh; width: 100%; background: white; pointer-events: auto;
+                display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; box-sizing: border-box; z-index: 20;
+            }
+            .dragon-wrapper { height: 100%; top: 60%; }
+            .dragon-img { max-width: 90%; max-height: 60vh; transform: scale(0.9); }
+            .cta-wrap, .text-wrap { position: static; text-align: center; }
+            h2 { font-size: 3rem; color: #111; }
+            p { color: #444; font-size: 0.9rem; }
+            .cta { background: #111; color: white; width: 100%; }
+        }
+    </style>
+</head>
+<body class="theme-red">
+
+    <div id="three-canvas-container"></div>
+
+    <div id="app">
+        <div id="light-beam-container">
+            <div id="light-beam"></div>
+        </div>
+
+        <div id="rope-container" onclick="toggleFire()">
+            <div class="rope-line"></div>
+            <div class="rope-handle"></div>
+        </div>
+
+        <header class="anim-element">
+            <div class="logo">PIXI</div>
+            <div class="menu-icon">
+                <div class="line line-1"></div>
+                <div class="line line-2"></div>
+                <div class="line line-3"></div>
+            </div>
+        </header>
+
+        <button class="nav-btn prev-btn" onclick="switchDragon(-1)">PREV</button>
+        <button class="nav-btn next-btn" onclick="switchDragon(1)">NEXT</button>
+
+        <div id="slider-container">
+            <!-- SLIDE 1 -->
+            <div class="slide" data-theme="red">
+                <div class="top-section">
+                    <div class="dragon-wrapper">
+                        <img src="reddragon.png" class="dragon-img anim-element" alt="Red Dragon">
+                        <img src="redfire.png" class="fire-img" alt="Red Fire">
+                    </div>
+                </div>
+                <div class="bottom-section">
+                    <div class="text-wrap anim-element">
+                        <h2>IGNIS</h2>
+                        <p>A primal force of destruction. Forged in the core of a dying sun.</p>
+                    </div>
+                    <div class="cta-wrap anim-element">
+                        <button class="cta">BATTLE IGNIS</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE 2 -->
+            <div class="slide" data-theme="blue">
+                <div class="top-section">
+                    <div class="dragon-wrapper">
+                        <img src="bluedragon.png" class="dragon-img anim-element" alt="Blue Dragon">
+                        <img src="bluefire.png" class="fire-img" alt="Blue Fire">
+                    </div>
+                </div>
+                <div class="bottom-section">
+                    <div class="text-wrap anim-element">
+                        <h2>GLACIUS</h2>
+                        <p>The eternal warden of the frozen depths and shards of ice.</p>
+                    </div>
+                    <div class="cta-wrap anim-element">
+                        <button class="cta">DIVE INTO ABYSS</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE 3 -->
+            <div class="slide" data-theme="green">
+                <div class="top-section">
+                    <div class="dragon-wrapper">
+                        <img src="greendragon.png" class="dragon-img anim-element" alt="Green Dragon">
+                        <img src="greenfire.png" class="fire-img" alt="Green Fire">
+                    </div>
+                </div>
+                <div class="bottom-section">
+                    <div class="text-wrap anim-element">
+                        <h2>SYLVA</h2>
+                        <p>The guardian of the living world. Where he breathes, forests rise.</p>
+                    </div>
+                    <div class="cta-wrap anim-element">
+                        <button class="cta">SURRENDER</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const slides = document.querySelectorAll('.slide');
+        let currentIdx = 0;
+        let fireActive = false;
+        let isAnimating = false;
+
+        let scene, camera, renderer, spheres = [];
+        const themeColors = { red: 0xff3333, blue: 0x00d4ff, green: 0x2ecc71 };
+
+        function initThree() {
+            const container = document.getElementById('three-canvas-container');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(5, 5, 5);
+            scene.add(pointLight);
+            for (let i = 0; i < 4; i++) {
+                const geo = new THREE.SphereGeometry(0.4, 32, 32);
+                const mat = new THREE.MeshStandardMaterial({ color: themeColors.red, emissive: themeColors.red, emissiveIntensity: 0.2, roughness: 0.1, metalness: 0.8 });
+                const sphere = new THREE.Mesh(geo, mat);
+                sphere.userData = { baseX: (i < 2 ? -8 : 8), baseY: (i % 2 === 0 ? 3 : -3), radius: 1.5, speed: 0.7, offset: Math.random() * 6 };
+                scene.add(sphere);
+                spheres.push(sphere);
+            }
+            camera.position.z = 12;
+            animateThree();
+        }
+
+        function animateThree() {
+            requestAnimationFrame(animateThree);
+            const time = Date.now() * 0.001;
+            spheres.forEach(s => {
+                s.position.x = s.userData.baseX + Math.sin(time * s.userData.speed + s.userData.offset) * s.userData.radius;
+                s.position.y = s.userData.baseY + Math.cos(time * s.userData.speed + s.userData.offset) * s.userData.radius;
+            });
+            renderer.render(scene, camera);
+        }
+
+        function toggleFire() {
+            fireActive = !fireActive;
+            const beam = document.getElementById('light-beam');
+            const fireImgs = document.querySelectorAll('.fire-img');
+            if (fireActive) {
+                beam.classList.add('active');
+                fireImgs.forEach(f => f.classList.add('active'));
+                document.body.classList.add('fire-on');
+            } else {
+                beam.classList.remove('active');
+                fireImgs.forEach(f => f.classList.remove('active'));
+                document.body.classList.remove('fire-on');
+            }
+        }
+
+        function switchDragon(dir) {
+            if (isAnimating) return;
+            isAnimating = true;
+            const currentSlide = slides[currentIdx];
+            currentIdx = (currentIdx + dir + slides.length) % slides.length;
+            const nextSlide = slides[currentIdx];
+            currentSlide.style.visibility = 'hidden';
+            nextSlide.style.visibility = 'visible';
+            document.body.className = `theme-${nextSlide.dataset.theme}${fireActive ? ' fire-on' : ''}`;
+            const color = themeColors[nextSlide.dataset.theme];
+            spheres.forEach(s => { s.material.color.setHex(color); s.material.emissive.setHex(color); });
+            triggerRise(nextSlide);
+            isAnimating = false;
+        }
+
+        function triggerRise(slide) {
+            slide.querySelectorAll('.anim-element').forEach((el, i) => {
+                el.classList.remove('rise-up');
+                void el.offsetWidth;
+                el.style.animationDelay = `${i * 0.1}s`;
+                el.classList.add('rise-up');
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            slides[0].classList.add('active');
+            triggerRise(slides[0]);
+            document.querySelector('header').classList.add('rise-up');
+            initThree();
+        });
+    </script>
+</body>
+</html>
