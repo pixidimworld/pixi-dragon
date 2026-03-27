@@ -1,0 +1,15 @@
+{
+  "name": "pixi-dragon",
+  "version": "1.0.0",
+  "description": "PIXI - Cinematic Interactive Landing",
+  "main": "dragon/index.html",
+  "scripts": {
+    "dev": "npx http-server dragon -p 3000 -c-1 --cors"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
